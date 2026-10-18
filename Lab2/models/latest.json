@@ -5,5 +5,7 @@
     "previous_version": null,
     "promoted_at": "2026-10-18T21:09:32+00:00",
     "commit": "98e0f375b1a71ea448bcbd6eed9f02b7206e8848",
-    "workflow_run_id": "39166514826"
+    "workflow_run_id": "39166514826",
+    "calibrated_model_file": "models/model_20261018210929_rf_calibrated_sigmoid.joblib",
+    "calibration_method": "sigmoid"
 }
