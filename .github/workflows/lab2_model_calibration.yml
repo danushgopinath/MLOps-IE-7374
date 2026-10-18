@@ -1,0 +1,74 @@
+name: Lab2 Model Calibration
+run-name: Lab2 calibration (${{ github.event_name }})
+
+on:
+  # Runs automatically after every Lab2 Model Retraining run finishes on main
+  workflow_run:
+    workflows: ["Lab2 Model Retraining"]
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      method:
+        description: "Calibration method (sigmoid = Platt scaling)"
+        type: choice
+        options:
+          - sigmoid
+          - isotonic
+        default: sigmoid
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lab2-model-calibration
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.12"
+  METHOD: ${{ inputs.method || 'sigmoid' }}
+
+defaults:
+  run:
+    working-directory: Lab2
+
+jobs:
+  calibrate:
+    # Skip if retraining failed (for example the quality gate rejected the model)
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the latest main, which includes the model the retraining run just pushed
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: Lab2/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Calibrate latest model
+        run: python -m src.calibrate_model --method "$METHOD" --out-dir .
+
+      - name: Commit and push calibration results
+        run: |
+          if [ -z "$(git status --porcelain models metrics)" ]; then
+            echo "Nothing new to commit."
+            exit 0
+          fi
+          version=$(jq -r .version models/latest.json)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models metrics
+          git commit -m "Lab2: add ${METHOD} calibration for model version ${version}"
+          git pull --rebase origin main
+          git push origin HEAD:main

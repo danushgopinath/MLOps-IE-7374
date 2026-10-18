@@ -1,84 +1,57 @@
-# from sklearn.datasets import fetch_rcv1
-import mlflow, datetime, os, pickle, random
-# import sklearn
-from joblib import dump
-from sklearn.datasets import make_classification
-from sklearn.metrics import accuracy_score, f1_score
-import sys
-from sklearn.ensemble import RandomForestClassifier
 import argparse
 
-sys.path.insert(0, os.path.abspath('..'))
+from joblib import dump
+from sklearn.ensemble import RandomForestClassifier
+
+from src.common import DEFAULT_OUT_DIR, load_splits, model_path
 
 
-if __name__ == '__main__':
+def train(version, out_dir=DEFAULT_OUT_DIR, n_estimators=100, max_depth=None, seed=0):
+    """
+    Trains a random forest on the training split and saves it as a new model version.
+    Args:
+        version (str): Version id, used in the file name (the workflow uses a timestamp).
+        out_dir (str/Path): Folder that contains models/ and metrics/.
+        n_estimators (int): Number of trees.
+        max_depth (int/None): Maximum tree depth, None for no limit.
+        seed (int): Random seed for the forest.
+    Returns:
+        Path: Where the model was saved.
+    """
+    X_train, y_train = load_splits()["train"]
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--timestamp", type=str, required=True, help="Timestamp from GitHub Actions")
-    args = parser.parse_args()
-    
-    # Access the timestamp
-    timestamp = args.timestamp
-    
-    # Use the timestamp in your script
-    print(f"Timestamp received from GitHub Actions: {timestamp}")
-    
-    # Check if the file exists within the folder
-    X, y = make_classification(
-                            n_samples=random.randint(0, 2000),
-                            n_features=6,
-                            n_informative=3,
-                            n_redundant=0,
-                            n_repeated=0,
-                            n_classes=2,
-                            random_state=0,
-                            shuffle=True,
-                        )
-    if os.path.exists('data'): 
-        with open('data/data.pickle', 'wb') as data:
-            pickle.dump(X, data)
-            
-        with open('data/target.pickle', 'wb') as data:
-            pickle.dump(y, data)  
-    else:
-        os.makedirs('data/')
-        with open('data/data.pickle', 'wb') as data:
-            pickle.dump(X, data)
-            
-        with open('data/target.pickle', 'wb') as data:
-            pickle.dump(y, data)  
-            
-    mlflow.set_tracking_uri("./mlruns")
-    dataset_name = "Reuters Corpus Volume"
-    current_time = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
-    experiment_name = f"{dataset_name}_{current_time}"    
-    experiment_id = mlflow.create_experiment(f"{experiment_name}")
+    model = RandomForestClassifier(
+        n_estimators=n_estimators, max_depth=max_depth, random_state=seed, n_jobs=-1
+    )
+    model.fit(X_train, y_train)
 
-    with mlflow.start_run(experiment_id=experiment_id,
-                        run_name= f"{dataset_name}"):
-        
-        params = {
-                    "dataset_name": dataset_name,
-                    "number of datapoint": X.shape[0],
-                    "number of dimensions": X.shape[1]}
-        
-        mlflow.log_params(params)
-            
-        
-        forest = RandomForestClassifier(random_state=0)
-        forest.fit(X, y)
-        
-        y_predict = forest.predict(X)
-        mlflow.log_metrics({'Accuracy': accuracy_score(y, y_predict),
-                            'F1 Score': f1_score(y, y_predict)})
-        
-        if not os.path.exists('models/'): 
-            # then create it.
-            os.makedirs("models/")
-            
-        # After retraining the model
-        model_version = f'model_{timestamp}'  # Use a timestamp as the version
-        model_filename = f'{model_version}_dt_model.joblib'
-        dump(forest, model_filename)
-                    
+    path = model_path(out_dir, version)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    dump(model, path, compress=3)
+    return path
 
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Train a new model version.")
+    parser.add_argument("--version", required=True, help="Version id, e.g. a timestamp")
+    parser.add_argument("--n-estimators", type=int, default=100)
+    parser.add_argument("--max-depth", type=int, default=0, help="0 means no limit")
+    parser.add_argument("--out-dir", default=DEFAULT_OUT_DIR)
+    args = parser.parse_args(argv)
+
+    if args.n_estimators < 1 or args.max_depth < 0:
+        parser.error("--n-estimators must be at least 1 and --max-depth cannot be negative")
+
+    path = train(
+        args.version,
+        out_dir=args.out_dir,
+        n_estimators=args.n_estimators,
+        max_depth=args.max_depth or None,
+    )
+    print(f"Trained model version {args.version} "
+          f"(n_estimators={args.n_estimators}, max_depth={args.max_depth or None})")
+    print(f"Saved to {path}")
+
+
+if __name__ == "__main__":
+    main()

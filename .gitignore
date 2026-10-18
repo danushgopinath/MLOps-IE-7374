@@ -24,3 +24,6 @@ htmlcov/
 .vscode/
 .idea/
 .DS_Store
+
+# Lab2 local runs (the workflows write to Lab2/models and Lab2/metrics instead)
+Lab2/outputs/
