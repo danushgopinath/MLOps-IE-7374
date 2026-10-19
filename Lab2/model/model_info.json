@@ -1,0 +1,21 @@
+{
+    "model_type": "DecisionTreeClassifier",
+    "params": {
+        "max_depth": 3,
+        "random_state": 12
+    },
+    "test_accuracy": 0.9556,
+    "features": [
+        "sepal_length",
+        "sepal_width",
+        "petal_length",
+        "petal_width"
+    ],
+    "classes": [
+        "setosa",
+        "versicolor",
+        "virginica"
+    ],
+    "sklearn_version": "1.9.1",
+    "trained_at": "2026-10-19T03:02:22+00:00"
+}
